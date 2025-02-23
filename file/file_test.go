@@ -20,7 +20,7 @@ func TestFile(t *testing.T) {
 	fm := db.FileManager
 	page1 := file.NewPage(fm.BlockSize)
 
-	strPos1 := 42
+	strPos1 := 0
 	inStr1 := "hello"
 	strByteSize1 := page1.SetString(strPos1, inStr1)
 	fmt.Printf("strByteSize1: %d\n", strByteSize1)
@@ -39,6 +39,7 @@ func TestFile(t *testing.T) {
 
 	blk := file.NewBlockID("testblock", 0)
 	err = fm.Save(blk, page1)
+
 	if err != nil {
 		t.Fatalf("fm.Save: %v", err)
 	}
