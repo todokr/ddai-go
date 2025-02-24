@@ -6,14 +6,14 @@ import (
 )
 
 type LogIterator struct {
-	fileManager *file.FileManager
-	blk         *file.BlockID
+	fileManager *file.Manager
+	blk         file.BlockID
 	page        *file.Page
-	currentPos  int64
-	boundary    int64
+	currentPos  int32
+	boundary    int32
 }
 
-func NewIterator(fm *file.FileManager, blk *file.BlockID) (*LogIterator, error) {
+func NewIterator(fm *file.Manager, blk file.BlockID) (*LogIterator, error) {
 	b := make([]byte, fm.BlockSize)
 	page := file.NewPageWith(b)
 
@@ -30,12 +30,12 @@ func NewIterator(fm *file.FileManager, blk *file.BlockID) (*LogIterator, error) 
 	return it, nil
 }
 
-func (it *LogIterator) moveToBlock(blk *file.BlockID) error {
+func (it *LogIterator) moveToBlock(blk file.BlockID) error {
 	if err := it.fileManager.Load(blk, it.page); err != nil {
 		return err
 	}
 	it.blk = blk
-	it.boundary = int64(it.page.GetInt(0))
+	it.boundary = it.page.GetInt(0)
 	it.currentPos = it.boundary
 	return nil
 }
@@ -48,25 +48,25 @@ func (it *LogIterator) HasNext() bool {
 func (it *LogIterator) Next() []byte {
 	if it.currentPos == it.fileManager.BlockSize {
 		it.blk = file.NewBlockID(it.blk.FileName, it.blk.Index-1)
-		it.moveToBlock(it.blk)
+		_ = it.moveToBlock(it.blk)
 	}
-	rec := it.page.GetBytes(int(it.currentPos))
-	it.currentPos += int64(file.Int32ByteSize + len(rec))
+	rec := it.page.GetBytes(it.currentPos)
+	it.currentPos += file.Int32ByteSize + int32(len(rec))
 	return rec
 }
 
-// LogManager responsible for writing log records to the log file,
+// Manager responsible for writing log records to the log file,
 // treats the log as just an ever-increasing sequence of log records.
-type LogManager struct {
-	fileManager  *file.FileManager
+type Manager struct {
+	fileManager  *file.Manager
 	logFile      string
 	logPage      *file.Page
-	currentBlk   *file.BlockID
+	currentBlk   file.BlockID
 	latestLSN    int
 	lastSavedLSN int
 }
 
-func NewLogManager(fileManager *file.FileManager, logFile string) (*LogManager, error) {
+func NewManager(fileManager *file.Manager, logFile string) (*Manager, error) {
 	b := make([]byte, fileManager.BlockSize)
 	logPage := file.NewPageWith(b)
 
@@ -75,7 +75,7 @@ func NewLogManager(fileManager *file.FileManager, logFile string) (*LogManager, 
 		return nil, fmt.Errorf("fileManager.Length: %w", err)
 	}
 
-	lm := &LogManager{
+	lm := &Manager{
 		fileManager: fileManager,
 		logFile:     logFile,
 		logPage:     logPage,
@@ -97,20 +97,20 @@ func NewLogManager(fileManager *file.FileManager, logFile string) (*LogManager, 
 	return lm, nil
 }
 
-func (lm *LogManager) extendLogBlock() (*file.BlockID, error) {
+func (lm *Manager) extendLogBlock() (file.BlockID, error) {
 	blk, err := lm.fileManager.Extend(lm.logFile)
 	if err != nil {
-		return nil, fmt.Errorf("fileManager.Extend: %w", err)
+		return file.BlockID{}, fmt.Errorf("fileManager.Extend: %w", err)
 	}
-	lm.logPage.SetInt(0, int32(lm.fileManager.BlockSize))
+	lm.logPage.SetInt(0, lm.fileManager.BlockSize)
 	err = lm.fileManager.Save(blk, lm.logPage)
 	if err != nil {
-		return nil, fmt.Errorf("fileManager.Save: %w", err)
+		return file.BlockID{}, fmt.Errorf("fileManager.Save: %w", err)
 	}
 	return blk, nil
 }
 
-func (lm *LogManager) Flush(lsn int) error {
+func (lm *Manager) Flush(lsn int) error {
 	if lsn < lm.lastSavedLSN {
 		return nil
 	}
@@ -120,7 +120,7 @@ func (lm *LogManager) Flush(lsn int) error {
 	return nil
 }
 
-func (lm *LogManager) flush() error {
+func (lm *Manager) flush() error {
 	if err := lm.fileManager.Save(lm.currentBlk, lm.logPage); err != nil {
 		return fmt.Errorf("fileManager.Save: %w", err)
 	}
@@ -128,18 +128,18 @@ func (lm *LogManager) flush() error {
 	return nil
 }
 
-func (lm *LogManager) Iterator() (*LogIterator, error) {
+func (lm *Manager) Iterator() (*LogIterator, error) {
 	if err := lm.flush(); err != nil {
 		return nil, fmt.Errorf("lm.flush: %w", err)
 	}
 	return NewIterator(lm.fileManager, lm.currentBlk)
 }
 
-func (lm *LogManager) Append(rec []byte) (int, error) {
+func (lm *Manager) Append(rec []byte) (int, error) {
 	// boundary contains the offset of the most recently added record.
 	// This strategy enables the log iterator to read records in reverse order by reading from left to right.
-	boundary := int(lm.logPage.GetInt(0))
-	recSize := len(rec)
+	boundary := lm.logPage.GetInt(0)
+	recSize := int32(len(rec))
 	bytesNeeded := recSize + file.Int32ByteSize
 
 	if boundary-bytesNeeded < file.Int32ByteSize {
@@ -153,11 +153,11 @@ func (lm *LogManager) Append(rec []byte) (int, error) {
 			return 0, fmt.Errorf("lm.extendLogBlock: %w", err)
 		}
 		lm.currentBlk = extendedBlk
-		boundary = int(lm.logPage.GetInt(0))
+		boundary = lm.logPage.GetInt(0)
 	}
 	recPos := boundary - bytesNeeded
 	lm.logPage.SetBytes(recPos, rec)
-	lm.logPage.SetInt(0, int32(recPos)) // the new boundary
+	lm.logPage.SetInt(0, recPos) // the new boundary
 
 	lm.latestLSN += 1
 

@@ -2,7 +2,9 @@ package file
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -11,11 +13,11 @@ import (
 
 type BlockID struct {
 	FileName string
-	Index    int64
+	Index    int32
 }
 
-func NewBlockID(filename string, index int64) *BlockID {
-	return &BlockID{FileName: filename, Index: index}
+func NewBlockID(filename string, index int32) BlockID {
+	return BlockID{FileName: filename, Index: index}
 }
 
 type Page struct {
@@ -23,12 +25,12 @@ type Page struct {
 }
 
 const (
-	Int32ByteSize = 4
-	Utf16ByteSize = 2
+	Int32ByteSize int32 = 4
+	Utf16ByteSize int32 = 2
 )
 
 // NewPage - for creating data buffers
-func NewPage(blockSize int64) *Page {
+func NewPage(blockSize int32) *Page {
 	return &Page{
 		Buffer: make([]byte, blockSize),
 	}
@@ -43,7 +45,7 @@ func NewPageWith(buffer []byte) *Page {
 
 // SetInt stores an int32 at the specified offset in the page.
 // returns byte size that the val occupies, intended to be used for calculating next offset
-func (p *Page) SetInt(offset int, val int32) int {
+func (p *Page) SetInt(offset int32, val int32) int32 {
 	binary.LittleEndian.PutUint32(
 		p.Buffer[offset:offset+Int32ByteSize],
 		uint32(val),
@@ -51,40 +53,40 @@ func (p *Page) SetInt(offset int, val int32) int {
 	return Int32ByteSize
 }
 
-func (p *Page) GetInt(offset int) int32 {
+func (p *Page) GetInt(offset int32) int32 {
 	bytes := p.Buffer[offset : offset+Int32ByteSize]
 	return int32(binary.LittleEndian.Uint32(bytes))
 }
 
 // SetBytes stores a byte slice at the specified offset in the page.
 // returns byte size thad the val occupies, intended to be used for calculating next offset
-func (p *Page) SetBytes(offset int, val []byte) int {
+func (p *Page) SetBytes(offset int32, val []byte) int32 {
 	p.SetInt(offset, int32(len(val)))
 	copy(p.Buffer[offset+Int32ByteSize:], val)
 	return MaxLength(len(val))
 }
 
-func (p *Page) GetBytes(offset int) []byte {
+func (p *Page) GetBytes(offset int32) []byte {
 	length := p.GetInt(offset)
 	from := offset + Int32ByteSize // skip int32 representing length
-	to := from + int(length)
+	to := from + length
 	return p.Buffer[from:to]
 }
 
 // SetString stores a string at the specified offset in the page.
 // returns byte size that the val occupies, intended to be used for calculating next offset
-func (p *Page) SetString(offset int, val string) int {
+func (p *Page) SetString(offset int32, val string) int32 {
 	runes := utf16.Encode([]rune(val))
 	p.SetInt(offset, int32(len(runes))*Utf16ByteSize)
 	for i, r := range runes {
-		from := offset + Int32ByteSize + i*Utf16ByteSize // skip int32 representing length
+		from := offset + Int32ByteSize + int32(i)*Utf16ByteSize // skip int32 representing length
 		binary.LittleEndian.PutUint16(p.Buffer[from:from+Utf16ByteSize], r)
 	}
 	return MaxLength(len(runes))
 }
 
-func (p *Page) GetString(offset int) string {
-	length := int(p.GetInt(offset)) / Utf16ByteSize
+func (p *Page) GetString(offset int32) string {
+	length := p.GetInt(offset) / Utf16ByteSize
 	runes := make([]uint16, length)
 	for i := range length {
 		from := offset + Int32ByteSize + i*Utf16ByteSize // skip int32 representing length
@@ -93,17 +95,17 @@ func (p *Page) GetString(offset int) string {
 	return string(utf16.Decode(runes))
 }
 
-func MaxLength(length int) int {
-	return Int32ByteSize + length*Utf16ByteSize
+func MaxLength(length int) int32 {
+	return Int32ByteSize + int32(length)*Utf16ByteSize
 }
 
-type FileManager struct {
+type Manager struct {
 	DbDir     string
-	BlockSize int64
+	BlockSize int32
 	files     map[string]*os.File
 }
 
-func NewManager(dbDir string, blockSize int64) (*FileManager, error) {
+func NewManager(dbDir string, blockSize int32) (*Manager, error) {
 	// if not exist, create DbDir recursively
 	if _, err := os.Stat(dbDir); err != nil {
 		if !os.IsNotExist(err) {
@@ -115,7 +117,7 @@ func NewManager(dbDir string, blockSize int64) (*FileManager, error) {
 		}
 	}
 
-	// remove any leftover temprary files
+	// remove any leftover temp files
 	files, err := os.ReadDir(dbDir)
 	if err != nil {
 		return nil, fmt.Errorf("os.ReadDir: %w", err)
@@ -129,7 +131,7 @@ func NewManager(dbDir string, blockSize int64) (*FileManager, error) {
 			return nil, fmt.Errorf("os.Remove: %w", err)
 		}
 	}
-	return &FileManager{
+	return &Manager{
 		DbDir:     dbDir,
 		BlockSize: blockSize,
 		files:     make(map[string]*os.File),
@@ -137,19 +139,19 @@ func NewManager(dbDir string, blockSize int64) (*FileManager, error) {
 }
 
 // Load bytes corresponds block ID from disk into a page
-func (fm *FileManager) Load(blk *BlockID, p *Page) error {
+func (fm *Manager) Load(blk BlockID, p *Page) error {
 	f, err := fm.open(blk.FileName)
 	if err != nil {
 		return fmt.Errorf("fm.open: %w", err)
 	}
 
-	_, err = f.Seek(fm.BlockSize*blk.Index, 0)
+	_, err = f.Seek(int64(fm.BlockSize*blk.Index), 0)
 	if err != nil {
 		return fmt.Errorf("f.Seek: %w", err)
 	}
 
 	_, err = f.Read(p.Buffer)
-	if err != nil {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return fmt.Errorf("f.Read: %w", err)
 	}
 
@@ -157,13 +159,13 @@ func (fm *FileManager) Load(blk *BlockID, p *Page) error {
 }
 
 // Save the contents of the page to the specified block.
-func (fm *FileManager) Save(blk *BlockID, p *Page) error {
+func (fm *Manager) Save(blk BlockID, p *Page) error {
 	f, err := fm.open(blk.FileName)
 	if err != nil {
 		return fmt.Errorf("fm.open: %w", err)
 	}
 
-	_, err = f.Seek(fm.BlockSize*blk.Index, 0)
+	_, err = f.Seek(int64(fm.BlockSize*blk.Index), 0)
 	if err != nil {
 		return fmt.Errorf("f.Seek: %w", err)
 	}
@@ -176,33 +178,33 @@ func (fm *FileManager) Save(blk *BlockID, p *Page) error {
 	return nil
 }
 
-func (fm *FileManager) Extend(filename string) (*BlockID, error) {
+func (fm *Manager) Extend(filename string) (BlockID, error) {
 	newBlockIndex, err := fm.Length(filename) // Length == Index + 1
 	if err != nil {
-		return nil, fmt.Errorf("fm.Length: %w", err)
+		return BlockID{}, fmt.Errorf("fm.Length: %w", err)
 	}
 	blk := NewBlockID(filename, newBlockIndex)
 	b := make([]byte, fm.BlockSize)
 
 	f, err := fm.open(blk.FileName)
 	if err != nil {
-		return nil, fmt.Errorf("fm.open: %w", err)
+		return BlockID{}, fmt.Errorf("fm.open: %w", err)
 	}
 
-	_, err = f.Seek(blk.Index*fm.BlockSize, 0)
+	_, err = f.Seek(int64(fm.BlockSize*blk.Index), 0)
 	if err != nil {
-		return nil, fmt.Errorf("f.Seek: %w", err)
+		return BlockID{}, fmt.Errorf("f.Seek: %w", err)
 	}
 	_, err = f.Write(b)
 	if err != nil {
-		return nil, fmt.Errorf("f.Write: %w", err)
+		return BlockID{}, fmt.Errorf("f.Write: %w", err)
 	}
 
 	return blk, nil
 }
 
 // Length returns how many blocks are in the file
-func (fm *FileManager) Length(filename string) (int64, error) {
+func (fm *Manager) Length(filename string) (int32, error) {
 	f, err := fm.open(filename)
 	if err != nil {
 		return 0, fmt.Errorf("fm.open: %w", err)
@@ -213,10 +215,10 @@ func (fm *FileManager) Length(filename string) (int64, error) {
 		return 0, fmt.Errorf("f.Stat: %w", err)
 	}
 
-	return fi.Size() / fm.BlockSize, nil
+	return int32(fi.Size()) / fm.BlockSize, nil
 }
 
-func (fm *FileManager) open(fileName string) (*os.File, error) {
+func (fm *Manager) open(fileName string) (*os.File, error) {
 	if f, ok := fm.files[fileName]; ok {
 		return f, nil
 	}

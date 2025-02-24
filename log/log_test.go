@@ -13,7 +13,7 @@ import (
 func TestLog(t *testing.T) {
 	t.Parallel()
 
-	db, err := server.NewSimpleDB(path.Join(t.TempDir(), "filetest"), 400)
+	db, err := server.NewSimpleDB(path.Join(t.TempDir(), "filetest"), 400, 8)
 	if err != nil {
 		t.Fatalf("server.NewSimpleDB: %v", err)
 	}
@@ -21,7 +21,7 @@ func TestLog(t *testing.T) {
 	logManager := db.LogManager
 
 	createLogRecord := func(s string, n int) []byte {
-		spos := 0
+		spos := int32(0)
 		npos := spos + file.MaxLength(len(s))
 		b := make([]byte, npos+file.Int32ByteSize)
 		p := file.NewPageWith(b)
@@ -56,7 +56,7 @@ func TestLog(t *testing.T) {
 	}
 }
 
-func peekLogRecords(logManager *log.LogManager) string {
+func peekLogRecords(logManager *log.Manager) string {
 	iter, err := logManager.Iterator()
 	if err != nil {
 		panic(err)

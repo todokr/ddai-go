@@ -12,7 +12,7 @@ func TestFile(t *testing.T) {
 	t.Parallel()
 
 	dbDir := path.Join(t.TempDir(), "filetest")
-	db, err := server.NewSimpleDB(dbDir, 400)
+	db, err := server.NewSimpleDB(dbDir, 400, 8)
 	if err != nil {
 		t.Fatalf("server.NewSimpleDB: %v", err)
 	}
@@ -20,7 +20,7 @@ func TestFile(t *testing.T) {
 	fm := db.FileManager
 	page1 := file.NewPage(fm.BlockSize)
 
-	strPos1 := 0
+	strPos1 := int32(0)
 	inStr1 := "hello"
 	strByteSize1 := page1.SetString(strPos1, inStr1)
 	fmt.Printf("strByteSize1: %d\n", strByteSize1)
