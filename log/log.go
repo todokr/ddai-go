@@ -62,8 +62,8 @@ type Manager struct {
 	logFile      string
 	logPage      *file.Page
 	currentBlk   file.BlockID
-	latestLSN    int
-	lastSavedLSN int
+	latestLSN    int32
+	lastSavedLSN int32
 }
 
 func NewManager(fileManager *file.Manager, logFile string) (*Manager, error) {
@@ -110,7 +110,7 @@ func (lm *Manager) extendLogBlock() (file.BlockID, error) {
 	return blk, nil
 }
 
-func (lm *Manager) Flush(lsn int) error {
+func (lm *Manager) Flush(lsn int32) error {
 	if lsn < lm.lastSavedLSN {
 		return nil
 	}
@@ -135,7 +135,8 @@ func (lm *Manager) Iterator() (*LogIterator, error) {
 	return NewIterator(lm.fileManager, lm.currentBlk)
 }
 
-func (lm *Manager) Append(rec []byte) (int, error) {
+// Append adds a record to the log
+func (lm *Manager) Append(rec []byte) (int32, error) {
 	// boundary contains the offset of the most recently added record.
 	// This strategy enables the log iterator to read records in reverse order by reading from left to right.
 	boundary := lm.logPage.GetInt(0)
