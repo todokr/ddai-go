@@ -28,8 +28,9 @@ func (r commitRecord) TxNumber() int32 {
 	return r.txNum
 }
 
-func (r commitRecord) Undo(transactor Transactor) {
+func (r commitRecord) Undo(transactor Transactor) error {
 	// no need to undo commit itself
+	return nil
 }
 
 func (r commitRecord) String() string {

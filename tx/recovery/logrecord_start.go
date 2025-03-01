@@ -28,8 +28,9 @@ func (s startRecord) TxNumber() int32 {
 	return s.txNum
 }
 
-func (s startRecord) Undo(transactor Transactor) {
+func (s startRecord) Undo(transactor Transactor) error {
 	// no need to undo start
+	return nil
 }
 
 func (s startRecord) String() string {

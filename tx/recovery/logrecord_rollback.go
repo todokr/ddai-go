@@ -28,8 +28,9 @@ func (r rollbackRecord) TxNumber() int32 {
 	return r.txNum
 }
 
-func (r rollbackRecord) Undo(transactor Transactor) {
+func (r rollbackRecord) Undo(transactor Transactor) error {
 	// no need to undo rollback itself
+	return nil
 }
 
 func (r rollbackRecord) String() string {

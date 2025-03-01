@@ -4,7 +4,6 @@ import (
 	"ddai-go/file"
 	"ddai-go/log"
 	"fmt"
-	stdlog "log"
 )
 
 type setIntRecord struct {
@@ -55,14 +54,15 @@ func (r setIntRecord) TxNumber() int32 {
 	return r.txNum
 }
 
-func (r setIntRecord) Undo(transactor Transactor) {
+func (r setIntRecord) Undo(transactor Transactor) error {
 	if err := transactor.Pin(r.blk); err != nil {
-		stdlog.Panicf("cannot pin block %v: %v", r.blk, err)
+		return fmt.Errorf("cannot pin block %v: %v", r.blk, err)
 	}
 	if err := transactor.SetInt(r.blk, r.offset, r.val, false); err != nil {
-		stdlog.Panicf("cannot set block %v: %v", r.blk, err)
+		return fmt.Errorf("cannot set block %v: %v", r.blk, err)
 	}
 	transactor.Unpin(r.blk)
+	return nil
 }
 
 func (r setIntRecord) WriteToLog(lm *log.Manager) (int32, error) {

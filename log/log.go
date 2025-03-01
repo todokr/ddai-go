@@ -45,14 +45,17 @@ func (it *LogIterator) HasNext() bool {
 
 }
 
-func (it *LogIterator) Next() []byte {
+func (it *LogIterator) Next() ([]byte, error) {
 	if it.currentPos == it.fileManager.BlockSize {
 		it.blk = file.NewBlockID(it.blk.FileName, it.blk.Index-1)
-		_ = it.moveToBlock(it.blk)
+		err := it.moveToBlock(it.blk)
+		if err != nil {
+			return nil, err
+		}
 	}
 	rec := it.page.GetBytes(it.currentPos)
 	it.currentPos += file.Int32ByteSize + int32(len(rec))
-	return rec
+	return rec, nil
 }
 
 // Manager responsible for writing log records to the log file,

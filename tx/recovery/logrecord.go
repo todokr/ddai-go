@@ -10,9 +10,9 @@ type LogRecordType = int32
 
 const (
 	Undefined LogRecordType = iota
-	// Checkpoint records are added to the log in order to reduce the portion of the log
+	// CheckPoint records are added to the log in order to reduce the portion of the log
 	// that the recovery algorithm needs to consider.
-	Checkpoint
+	CheckPoint
 	Start
 	Commit
 	Rollback
@@ -23,7 +23,7 @@ const (
 type LogRecord interface {
 	Op() LogRecordType
 	TxNumber() int32
-	Undo(transactor Transactor)
+	Undo(transactor Transactor) error
 	String() string
 	WriteToLog(lm *log.Manager) (int32, error)
 }
@@ -31,7 +31,7 @@ type LogRecord interface {
 func NewLogRecord(bytes []byte) (LogRecord, error) {
 	p := file.NewPageWith(bytes)
 	switch LogRecordType(p.GetInt(0)) {
-	case Checkpoint:
+	case CheckPoint:
 		return newCheckPointRecord(), nil
 	case Start:
 		return newStartRecordFrom(p), nil

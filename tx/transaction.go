@@ -4,23 +4,25 @@ import (
 	"ddai-go/buffer"
 	"ddai-go/file"
 	"ddai-go/log"
+	"ddai-go/tx/concurrency"
 	"ddai-go/tx/recovery"
-
+	"fmt"
 	"sync/atomic"
 )
 
 type Transaction struct {
 	recoveryMgr *recovery.Manager
-	// concurMgr   *concurrency.Manager
-	bufferMgr *buffer.Manager
-	fileMgr   *file.Manager
-	txNum     int32
-	bufs      *BufferList
+	concurMgr   *concurrency.Manager
+	bufferMgr   *buffer.Manager
+	fileMgr     *file.Manager
+	txNum       int32
+	bufs        *BufferList
 }
 
 func New(fileMgr *file.Manager, logMgr *log.Manager, bufManager *buffer.Manager) *Transaction {
 	txNum := nextTxNum()
 	tx := &Transaction{
+		concurMgr: concurrency.New(),
 		bufferMgr: bufManager,
 		fileMgr:   fileMgr,
 		txNum:     txNum,
@@ -37,16 +39,34 @@ func nextTxNum() int32 {
 	return txNum
 }
 
-func (tx *Transaction) Commit() {
-	// TODO
+func (tx *Transaction) Commit() error {
+	if err := tx.recoveryMgr.Commit(); err != nil {
+		return fmt.Errorf("commit tx failed %v", err)
+	}
+	tx.concurMgr.Release()
+	tx.bufs.unpinAll()
+	fmt.Printf("Transaction %d committed\n", tx.txNum)
+	return nil
 }
 
-func (tx *Transaction) Rollback() {
-	// TODO
+func (tx *Transaction) Rollback() error {
+	if err := tx.recoveryMgr.Rollback(); err != nil {
+		return fmt.Errorf("rollback tx failed %v", err)
+	}
+	tx.concurMgr.Release()
+	tx.bufs.unpinAll()
+	fmt.Printf("Transaction %d rollbacked\n", tx.txNum)
+	return nil
 }
 
-func (tx *Transaction) Recover() {
-	// TODO
+func (tx *Transaction) Recover() error {
+	if err := tx.bufferMgr.FlushAll(tx.txNum); err != nil {
+		return fmt.Errorf("bufferMgr.FlushAll: %v\n", err)
+	}
+	if err := tx.recoveryMgr.Recover(); err != nil {
+		return fmt.Errorf("recoveryMgr.Recover: %v\n", err)
+	}
+	return nil
 }
 
 func (tx *Transaction) Pin(blk file.BlockID) error {
