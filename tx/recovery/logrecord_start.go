@@ -3,7 +3,6 @@ package recovery
 import (
 	"ddai-go/file"
 	"ddai-go/log"
-	"ddai-go/tx"
 )
 
 var _ LogRecord = (*startRecord)(nil)
@@ -29,7 +28,7 @@ func (s startRecord) TxNumber() int32 {
 	return s.txNum
 }
 
-func (s startRecord) Undo(tx tx.Transaction) {
+func (s startRecord) Undo(transactor Transactor) {
 	// no need to undo start
 }
 

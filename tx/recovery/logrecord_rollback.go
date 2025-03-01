@@ -3,7 +3,6 @@ package recovery
 import (
 	"ddai-go/file"
 	"ddai-go/log"
-	"ddai-go/tx"
 	"fmt"
 )
 
@@ -29,7 +28,7 @@ func (r rollbackRecord) TxNumber() int32 {
 	return r.txNum
 }
 
-func (r rollbackRecord) Undo(tx tx.Transaction) {
+func (r rollbackRecord) Undo(transactor Transactor) {
 	// no need to undo rollback itself
 }
 

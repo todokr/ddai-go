@@ -3,7 +3,6 @@ package recovery
 import (
 	"ddai-go/file"
 	"ddai-go/log"
-	"ddai-go/tx"
 )
 
 var _ LogRecord = (*checkPointRecord)(nil)
@@ -22,7 +21,7 @@ func (r *checkPointRecord) TxNumber() int32 {
 	return 0
 }
 
-func (r *checkPointRecord) Undo(tx tx.Transaction) {
+func (r *checkPointRecord) Undo(transactor Transactor) {
 	// no need to undo checkpoint
 }
 

@@ -3,7 +3,6 @@ package recovery
 import (
 	"ddai-go/file"
 	"ddai-go/log"
-	"ddai-go/tx"
 	"fmt"
 )
 
@@ -24,7 +23,7 @@ const (
 type LogRecord interface {
 	Op() LogRecordType
 	TxNumber() int32
-	Undo(tx tx.Transaction)
+	Undo(transactor Transactor)
 	String() string
 	WriteToLog(lm *log.Manager) (int32, error)
 }

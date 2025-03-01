@@ -3,7 +3,6 @@ package recovery
 import (
 	"ddai-go/file"
 	"ddai-go/log"
-	"ddai-go/tx"
 	"fmt"
 )
 
@@ -29,7 +28,7 @@ func (r commitRecord) TxNumber() int32 {
 	return r.txNum
 }
 
-func (r commitRecord) Undo(tx tx.Transaction) {
+func (r commitRecord) Undo(transactor Transactor) {
 	// no need to undo commit itself
 }
 

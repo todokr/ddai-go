@@ -3,7 +3,6 @@ package recovery
 import (
 	"ddai-go/file"
 	"ddai-go/log"
-	"ddai-go/tx"
 	"fmt"
 
 	stdlog "log"
@@ -57,8 +56,8 @@ func (r setStringRecord) TxNumber() int32 {
 	return r.txNum
 }
 
-func (r setStringRecord) Undo(tx tx.Transaction) {
-	err := tx.Pin(r.blk)
+func (r setStringRecord) Undo(transactor Transactor) {
+	err := transactor.Pin(r.blk)
 	if err != nil {
 		stdlog.Panicf("cannot pin block %v: %v", r.blk, err)
 	}
